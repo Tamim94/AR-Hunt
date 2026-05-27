@@ -2,43 +2,12 @@ const STORAGE_SCORE_KEY = "arhunt:score";
 const STORAGE_COMPLETED_KEY = "arhunt:completed";
 const HOLD_TO_COMPLETE_MS = 2000;
 
-// Each mission is intentionally simple so it can be swapped for real campus markers later.
 const missions = [
-  {
-    id: "library-mascot",
-    name: "Library Mascot",
-    building: "Main Library",
-    points: 10,
-    markerType: "hiro"
-  },
-  {
-    id: "student-union-beacon",
-    name: "Student Union Beacon",
-    building: "Student Union",
-    points: 10,
-    markerType: "hiro"
-  },
-  {
-    id: "engineering-gear",
-    name: "Engineering Gear",
-    building: "Engineering Hall",
-    points: 10,
-    markerType: "hiro"
-  },
-  {
-    id: "garden-crest",
-    name: "Garden Crest",
-    building: "Campus Garden",
-    points: 10,
-    markerType: "hiro"
-  },
-  {
-    id: "athletics-shield",
-    name: "Athletics Shield",
-    building: "Athletics Center",
-    points: 10,
-    markerType: "hiro"
-  }
+  { id: "library-mascot", name: "Library Mascot", building: "Main Library", points: 10, markerType: "hiro" },
+  { id: "student-union-beacon", name: "Student Union Beacon", building: "Student Union", points: 10, markerType: "hiro" },
+  { id: "engineering-gear", name: "Engineering Gear", building: "Engineering Hall", points: 10, markerType: "hiro" },
+  { id: "garden-crest", name: "Garden Crest", building: "Campus Garden", points: 10, markerType: "hiro" },
+  { id: "athletics-shield", name: "Athletics Shield", building: "Athletics Center", points: 10, markerType: "hiro" }
 ];
 
 const leaderboard = [
@@ -66,9 +35,9 @@ const fallbackBox = document.querySelector("#fallbackBox");
 
 let score = readNumber(STORAGE_SCORE_KEY);
 let completedMissionIds = new Set(
-  readJson(STORAGE_COMPLETED_KEY, []).filter((id) =>
-    missions.some((mission) => mission.id === id)
-  )
+    readJson(STORAGE_COMPLETED_KEY, []).filter((id) =>
+        missions.some((mission) => mission.id === id)
+    )
 );
 let markerVisible = false;
 let holdTimer = null;
@@ -105,14 +74,14 @@ function updateHud() {
   const percent = Math.round((completedCount / totalMissions) * 100);
 
   scoreCounter.textContent = `Score: ${score} pts`;
-  progressText.textContent = `${completedCount}/${totalMissions} missions completed`;
+  progressText.innerHTML = `<strong>${completedCount}</strong>/${totalMissions} missions completed`;
   progressFill.style.width = `${percent}%`;
 
   if (mission) {
     currentMission.textContent = `🎯 Find the ${mission.name}`;
     scanStatus.textContent = markerVisible
-      ? `Hold steady at ${mission.building}...`
-      : "Point your camera at the Hiro marker";
+        ? `Hold steady at ${mission.building}...`
+        : "Point your camera at the Hiro marker";
   } else {
     currentMission.textContent = "🏁 Campus route complete";
     scanStatus.textContent = "All AR missions are complete. Check the leaderboard!";
@@ -121,98 +90,53 @@ function updateHud() {
 
 function startHoldTimer() {
   const mission = getCurrentMission();
+  if (!markerVisible || holdTimer || !mission) return;
 
-  if (!markerVisible || holdTimer || !mission) {
-    return;
-  }
-
-  // This prototype uses the Hiro marker for every stop; custom markers can use this field later.
-  if (mission.markerType !== "hiro") {
-    scanStatus.textContent = `Wrong marker for ${mission.building}`;
-    return;
-  }
-
-  scanStatus.textContent = `Scanning ${mission.name}... hold for 2 seconds`;
-
-  holdTimer = window.setTimeout(() => {
+  holdTimer = setTimeout(() => {
+    completeMission(mission);
     holdTimer = null;
-
-    if (markerVisible) {
-      completeCurrentMission();
-    }
   }, HOLD_TO_COMPLETE_MS);
 }
 
-function clearHoldTimer(message = "Marker lost. Try again.") {
+function clearHoldTimer() {
   if (holdTimer) {
-    window.clearTimeout(holdTimer);
+    clearTimeout(holdTimer);
     holdTimer = null;
-  }
-
-  if (getCurrentMission()) {
-    scanStatus.textContent = message;
   }
 }
 
-function completeCurrentMission() {
-  const mission = getCurrentMission();
-
-  if (!mission || completedMissionIds.has(mission.id)) {
-    return;
-  }
-
+function completeMission(mission) {
+  if (completedMissionIds.has(mission.id)) return;
   completedMissionIds.add(mission.id);
   score += mission.points;
   persistGame();
-  updateHud();
   showToast(`+${mission.points} points! ${mission.name} found!`);
-
-  // If the marker is still in view, keep the demo flowing into the next mission.
-  if (markerVisible && getCurrentMission()) {
-    window.setTimeout(startHoldTimer, 500);
-  }
+  updateHud();
+  renderLeaderboard();
 }
 
 function showToast(message) {
-  window.clearTimeout(toastTimer);
   toast.textContent = message;
   toast.classList.add("is-visible");
-
-  toastTimer = window.setTimeout(() => {
-    toast.classList.remove("is-visible");
-  }, 2600);
-}
-
-function resetGame() {
-  score = 0;
-  completedMissionIds = new Set();
-  persistGame();
-  clearHoldTimer("Game reset. Point at the Hiro marker to begin.");
-  updateHud();
-  showToast("Game reset. Ready for a new hunt!");
-
-  if (markerVisible) {
-    startHoldTimer();
-  }
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
 }
 
 function renderLeaderboard() {
-  const mergedLeaderboard = leaderboard
-    .map((player) => (player.name === "You" ? { ...player, score } : player))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+  const board = leaderboard
+      .map((entry) => (entry.name === "You" ? { ...entry, score } : entry))
+      .sort((a, b) => b.score - a.score);
 
-  leaderboardList.innerHTML = mergedLeaderboard
-    .map(
-      (player, index) => `
-        <li>
-          <span class="rank">#${index + 1}</span>
-          <span>${player.name}</span>
-          <strong>${player.score} pts</strong>
-        </li>
-      `
-    )
-    .join("");
+  leaderboardList.innerHTML = board
+      .map(
+          (entry, i) => `
+      <li>
+        <span class="rank">#${i + 1}</span>
+        <span>${entry.name}</span>
+        <strong>${entry.score} pts</strong>
+      </li>`
+      )
+      .join("");
 }
 
 function openLeaderboard() {
@@ -226,11 +150,17 @@ function closeLeaderboardModal() {
   leaderboardModal.setAttribute("aria-hidden", "true");
 }
 
-function showModelFallback() {
-  campusModelEntity.setAttribute("visible", "false");
-  fallbackBox.setAttribute("visible", "true");
+function resetGame() {
+  if (!confirm("Reset all progress?")) return;
+  score = 0;
+  completedMissionIds.clear();
+  persistGame();
+  updateHud();
+  renderLeaderboard();
+  showToast("Progress reset");
 }
 
+// Marker events
 marker.addEventListener("markerFound", () => {
   markerVisible = true;
   updateHud();
@@ -243,38 +173,45 @@ marker.addEventListener("markerLost", () => {
   updateHud();
 });
 
-campusModelEntity.addEventListener("model-loaded", () => {
-  modelLoaded = true;
+// Model load fallback
+campusModelEntity.addEventListener("model-loaded", () => { modelLoaded = true; });
+campusModelEntity.addEventListener("model-error", () => {
+  if (modelLoaded) return;
+  campusModelEntity.setAttribute("visible", "false");
+  fallbackBox.setAttribute("visible", "true");
 });
 
-campusModelEntity.addEventListener("model-error", showModelFallback);
-
-// If the model CDN is slow or unavailable, the pitch still shows a visible AR object.
-window.setTimeout(() => {
-  if (!modelLoaded) {
-    showModelFallback();
-  }
-}, 9000);
-
+// UI bindings
 resetGameButton.addEventListener("click", resetGame);
 leaderboardButton.addEventListener("click", openLeaderboard);
 closeLeaderboard.addEventListener("click", closeLeaderboardModal);
-leaderboardModal.addEventListener("click", (event) => {
-  if (event.target === leaderboardModal) {
-    closeLeaderboardModal();
-  }
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    closeLeaderboardModal();
-  }
+leaderboardModal.addEventListener("click", (e) => {
+  if (e.target === leaderboardModal) closeLeaderboardModal();
 });
 
+// === AR.js video fix — keep camera feed properly sized ===
+function fixArjsVideo() {
+  const video = document.querySelector("video");
+  if (!video) return;
+  Object.assign(video.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    zIndex: "0",
+    display: "block"
+  });
+}
+
+window.addEventListener("resize", fixArjsVideo);
+window.addEventListener("orientationchange", () => setTimeout(fixArjsVideo, 300));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) setTimeout(fixArjsVideo, 300);
+});
+[500, 1500, 3000, 6000].forEach((d) => setTimeout(fixArjsVideo, d));
+
+// Init
 updateHud();
 renderLeaderboard();
-
-// Handy for live demos in DevTools: ARHunt.missions and ARHunt.resetGame().
-window.ARHunt = {
-  missions,
-  resetGame
-};
